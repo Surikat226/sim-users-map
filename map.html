@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Карта пользователей</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body style="margin:0;padding:0;">
+  <div id="map" style="height: 100vh; width: 100%;"></div>
+
+  <script>
+    // подключение к Telegram Mini App
+    const tg = window.Telegram.WebApp;
+    tg.expand(); // растягиваем на весь экран
+
+    // создаём карту
+    var map = L.map('map').setView([55.75, 37.61], 5);
+
+    // тайлы карты
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    var markers = {}; // маркеры по user_id
+    var userMarker = null; // маркер текущего пользователя
+
+    // функция для центрирования карты на текущем пользователе
+    function centerOnUser(lat, lon) {
+      map.setView([lat, lon], 12); // зум 12
+      if (!userMarker) {
+        userMarker = L.marker([lat, lon])
+          .addTo(map)
+          .bindPopup("Вы здесь")
+          .openPopup();
+      } else {
+        userMarker.setLatLng([lat, lon]);
+      }
+    }
+
+    // получаем геопозицию текущего пользователя
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          centerOnUser(lat, lon);
+        },
+        (err) => console.warn("Ошибка получения геопозиции:", err)
+      );
+    } else {
+      console.warn("Geolocation API не поддерживается браузером");
+    }
+
+    async function fetchCoordinates() {
+      try {
+        let response = await fetch("http://127.0.0.1:8000/coordinates");
+        let users = await response.json();
+
+        users.forEach(user => {
+          let { user_id, user_name, latitude, longitude, timestamp } = user;
+
+        if (markers[user_id]) {
+          // Если маркер уже есть на карте → обновляем его координаты
+          markers[user_id].setLatLng([latitude, longitude]);
+        } else {
+          // Если маркера ещё нет → создаём новый
+          markers[user_id] = L.marker([latitude, longitude])
+            .addTo(map)
+            .bindPopup(`${user_name}`);
+        }
+        });
+      } catch (err) {
+        console.error("Ошибка загрузки координат:", err);
+      }
+    }
+
+    setInterval(fetchCoordinates, 5000);
+    fetchCoordinates();
+  </script>
+</body>
+</html>
